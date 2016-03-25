@@ -11,6 +11,7 @@ import java.nio.charset.Charset;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.nio.file.StandardOpenOption;
 import java.util.ArrayList;
 
 import org.apache.pdfbox.cos.COSDocument;
@@ -23,7 +24,6 @@ import org.apache.pdfbox.util.PDFTextStripper;
  *
  */
 public class Builder {
-	private File file;
 	private String meeting, year;
 	private static String path = "/home/robintiman/Documents/Propaganda/";
 	private ArrayList<String> lines;
@@ -31,6 +31,7 @@ public class Builder {
 	public Builder(int m, String year) {
 		this.year = year;
 		lines = new ArrayList<String>();
+		lines.add("Närvaro: \n");
 		// Appends "0" to the meeting number if value is below 10"
 		if (m < 10) {
 			meeting = "0" + m;
@@ -38,20 +39,20 @@ public class Builder {
 			meeting = Integer.toString(m);
 		}
 
-		createMeetingFile();
 		getSummoning();
 		parseSummoning();
+		createMeetingFile();
 	}
 
 	/**
 	 * Creates the meeting file
 	 */
 	private void createMeetingFile() {
-		Path file = Paths.get(path + "Mötesanteckningar/protokoll_S" + meeting + "_" + year);
+		Path file = Paths.get(path + "Mötesanteckningar/S" + meeting);
 		try {
-			Files.write(file, lines, Charset.forName("UTF-8"));
-		} catch (IOException e) {
-			e.printStackTrace();
+			Files.write(file, lines, Charset.forName("UTF-8"), StandardOpenOption.CREATE_NEW);
+		} catch (Exception e) {
+			System.err.println("Notes from this meeting already exists \n");
 		}
 	}
 
@@ -65,9 +66,9 @@ public class Builder {
 			ReadableByteChannel rbc = Channels.newChannel(website.openStream());
 			FileOutputStream fos = new FileOutputStream(path + "/Kallelser/Kallelse_S" + meeting + "_" + year + ".pdf");
 			fos.getChannel().transferFrom(rbc, 0, Long.MAX_VALUE);
+			fos.close();
 		} catch (Exception e) {
-			System.err.println("Path to file has been changed. Please update path");
-			e.printStackTrace();
+			System.err.println("URL to file has been changed. Please use the option for updating URL to do so \n");
 		}
 	}
 
@@ -86,9 +87,38 @@ public class Builder {
 			pdfStripper = new PDFTextStripper();
 			pdDoc = new PDDocument(cosDoc);
 			String parsedText = pdfStripper.getText(pdDoc);
-			System.out.println(parsedText);
+			parseSummoningString(parsedText);
 		} catch (IOException e) {
 			e.printStackTrace();
+		}
+	}
+
+	/**
+	 * Used for parsing the parsedText returned by PDFBox. Will find and append
+	 * the agenda to the lines ArrayList
+	 * 
+	 * @param pdf
+	 */
+	private void parseSummoningString(String pdf) {
+		String[] sum = pdf.split("§");
+		for (int i = 1; i < sum.length; i++) {
+			String toAdd = "";
+			if (i != 1) {
+				if (sum[i].contains("OFMA")) {
+					sum[i] = sum[i].substring(0, sum[i].indexOf("\n"));
+					toAdd = sum[i] + "\n";
+					lines.add(toAdd);
+					return;
+				}
+				String[] temp = sum[i].split(" ");
+				temp[temp.length - 1] = "\n";
+				for (String k : temp) {
+					toAdd += k + " ";
+				} 
+			} else {
+				toAdd = sum[i];
+			}
+			lines.add(toAdd);
 		}
 	}
 }
